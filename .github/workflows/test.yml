@@ -9,45 +9,12 @@ permissions:
   contents: read
 
 env:
-  # Pre-existing failures on main that do not depend on the environment; the
-  # test job excludes them and the known-failures job runs only them.
+  # 測試檔和上層 agfnow/agentflow-v8 保持一字不差；這個分叉自己的排除只寫在這裡（AGF-V8-SYNC 2026-10-25）。
+  # ENV_SKIPS：在 ubuntu CI 缺本機前提（macOS PTY、host 執行期標記、發布鏡像沒有的來源檔）而跑不起來的測試，兩個 job 都不跑。
+  ENV_SKIPS: |
+  # KNOWN_FAILURES：上層 0bda431 在 CI 也會失敗、與環境無關的測試；test job 排除，known-failures job 只跑這些。
   KNOWN_FAILURES: |
-    ^host templates provide the exact ordered codex and claude profiles$
-    ^profile public setting changes use ids and reject removed worker paths$
-    ^host templates are exact, valid, and use the owner-approved defaults$
-    ^public setting paths use kebab-case and address profile ids$
-    ^the command-line change boundary rejects obsolete public setting paths$
-    ^runtime host and executable requirements are checked with safe, fixed command names$
-    ^initial language normalizes locale tags and falls back without requiring locale tools$
-    ^reload reads the current file again and does not use a prior in-memory value$
-    ^settings changes validate the complete batch before one atomic write$
-    ^stream configuration copies are adjacent and independent$
-    ^stream resolution loads its own configuration instead of the worktree root configuration$
-    ^templates expose cheap models and session exhaustion falls through to the next eligible profile$
-    ^invalid configuration on the next round is revalidated before requested work$
-    ^start combines initialization, exact owner input, intake, and structured JSON$
-    ^start treats bare godev as activation only and leaves an empty Ask \(codex\)$
-    ^start treats bare godev as activation only and leaves an empty Ask \(claude\)$
-    ^start reports an existing Ask when bare godev resumes written owner content$
-    ^close and stop hook agree on the first commit with a persisted language setting$
-    ^close performs one local notebook replacement and one scoped commit, then retries idempotently$
-    ^close rejects a repository change immediately before notebook replacement$
-    ^close retries after a later unrelated commit by finding the original closeout$
-    ^close recovers a commit that reports failure after Git created it$
-    ^close preserves unrelated unstaged edits and untracked files outside its committed candidate$
-    ^close scope preserves large outside moves and rejects changed exclusions, retries and later commits$
-    ^authorized push fetches and verifies a local remote without force$
-    ^new opens branch, worktree, notebook and commit in a real repo$
-    ^two parallel streams get independent adjacent configurations$
-    ^slow close push releases the notebook writer while retaining delivery ownership$
-    ^close accepts cosmetic Reply headings and reports warnings$
-    ^close publishes ignored completion records and retries the same manifest without another commit$
-    ^workspace layout instructions are explicit across the complete impact inventory$
-    ^startup and closeout guidance contains the complete fast-path contract$
-    ^minimality challenges and Taipei timestamps stay aligned across active guidance$
-    ^the always-loaded skill stays within the retained 17200-byte budget$
-    ^the front door makes activation and closeout one-shot operations$
-  TEST_FILES: ag-settings.test.js agf.test.js alignment.test.js completion-context.test.js cross-check-plan.test.js delegation-route.test.js devlog-guard.test.js external-runner.test.js install-hook.test.js looper.test.js metrics.test.js prompt-compression.test.js queue-contract.test.js release.test.js resume-intake.test.js round-linter.test.js setup.test.js start-journey.test.js stop-hook.test.js suite-evidence.test.js terminal-preflight.test.js terminal.test.js notebook-write.test.js
+  TEST_FILES: "*.test.js"
 
 jobs:
   test:
@@ -66,7 +33,7 @@ jobs:
           args=()
           while IFS= read -r pattern; do
             [ -n "$pattern" ] && args+=(--test-skip-pattern "$pattern")
-          done <<< "$KNOWN_FAILURES"
+          done <<< "$ENV_SKIPS$KNOWN_FAILURES"
           node --test "${args[@]}" $TEST_FILES
 
   known-failures:
@@ -87,4 +54,5 @@ jobs:
           while IFS= read -r pattern; do
             [ -n "$pattern" ] && args+=(--test-name-pattern "$pattern")
           done <<< "$KNOWN_FAILURES"
+          [ ${#args[@]} -gt 0 ] || { echo "no known failures"; exit 0; }
           node --test "${args[@]}" $TEST_FILES
