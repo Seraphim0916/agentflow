@@ -10,10 +10,30 @@ permissions:
 
 env:
   # 測試檔和上層 agfnow/agentflow-v8 保持一字不差；這個分叉自己的排除只寫在這裡（AGF-V8-SYNC 2026-10-25）。
-  # ENV_SKIPS：在 ubuntu CI 缺本機前提（macOS PTY、host 執行期標記、發布鏡像沒有的來源檔）而跑不起來的測試，兩個 job 都不跑。
+  # ENV_SKIPS：只在 ubuntu CI 失敗、macOS 乾淨環境會過的測試（ubuntu 沒有 macOS 的 trash 指令，spawnSync trash ENOENT），兩個 job 都不跑。
   ENV_SKIPS: |
+    ^kept live-gate state stays below home tmp even when setup fails$
+    ^ownership evidence permission failure$
+    ^standalone unavailable or forbidden external execution hands off before taking queue ownership$
+    ^interactive native and host plans reuse frozen queue identity, exclusive ownership and archive proof$
+    ^interactive cancellation, failed acceptance and changed frozen plans remain pending$
+    ^reset cannot forget an unresolved native writer after the claim helper exits$
+    ^interactive completion preserves hard permission and context requirements from its claim$
+    ^interactive queue requests host choice before ownership and accepts either permitted kind$
   # KNOWN_FAILURES：上層 0bda431 在 CI 也會失敗、與環境無關的測試；test job 排除，known-failures job 只跑這些。
   KNOWN_FAILURES: |
+    ^version-8 templates contain the exact switches and defaults$
+    ^template audit fills absent properties and reports invalid existing values without replacing them$
+    ^away-gates is optional, defaults off, validates and survives a settings change$
+    ^start treats bare godev as activation only and leaves an empty Ask \(claude\)$
+    ^start adds missing template fields and reports a safe invalid value without changing it$
+    ^start migrates schema seven before adding missing current template fields$
+    ^close scope preserves outside ownership during continued edits but reviews new, candidate and committed paths$
+    ^public release templates use the validator schema and explain installation readiness$
+    ^completion checks read away-gates from the active configuration$
+    ^startup reports effective defaults without rewriting older settings$
+    ^policy change during archive preparation refuses both archive and live publication$
+    ^the always-loaded skill stays within the retained 32 KiB budget$
   TEST_FILES: "*.test.js"
 
 jobs:
