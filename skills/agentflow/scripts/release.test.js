@@ -8,7 +8,9 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
 const repo_root = path.resolve(__dirname, '..', '..', '..')
-const release_config = JSON.parse(fs.readFileSync(path.join(repo_root, 'release', 'config.json'), 'utf8'))
+const release_config_path = path.join(repo_root, 'release', 'config.json')
+const release_skip = fs.existsSync(release_config_path) ? false : 'requires the source-repository release/ directory, which the published release mirror does not contain'
+const release_config = release_skip ? {} : JSON.parse(fs.readFileSync(release_config_path, 'utf8'))
 const expected_remote = `git@github.com:${release_config.org}/${release_config.repo}.git`
 
 const make_temp = prefix => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-`)))
@@ -90,7 +92,7 @@ const snapshot = target => {
 
 const write_license = (destination, value = 'approved release license\n') => fs.writeFileSync(path.join(destination, 'LICENSE'), value)
 
-test('protected release refuses missing, wrong, dirty, source, and parent destinations before mutation', () => {
+test('protected release refuses missing, wrong, dirty, source, and parent destinations before mutation', { skip: release_skip }, () => {
   const cases = []
   const source_root = make_source()
   try {
@@ -130,7 +132,7 @@ test('protected release refuses missing, wrong, dirty, source, and parent destin
   }
 })
 
-test('explicit assembly refuses a missing, symlinked, or non-regular license without changing the destination', () => {
+test('explicit assembly refuses a missing, symlinked, or non-regular license without changing the destination', { skip: release_skip }, () => {
   const source_root = make_source()
   const destinations = []
   try {
@@ -162,7 +164,7 @@ test('explicit assembly refuses a missing, symlinked, or non-regular license wit
   }
 })
 
-test('explicit assembly keeps the approved license and creates the exact public payload', () => {
+test('explicit assembly keeps the approved license and creates the exact public payload', { skip: release_skip }, () => {
   const source_root = make_source()
   const destination = make_temp('agentflow-release-payload')
   const approved_license = 'approved release license identity\n'
@@ -219,7 +221,7 @@ test('explicit assembly keeps the approved license and creates the exact public 
   }
 })
 
-test('protected release accepts a clean checkout with a normalized public remote', () => {
+test('protected release accepts a clean checkout with a normalized public remote', { skip: release_skip }, () => {
   const source_root = make_source()
   const destination = make_destination({ remote: 'HTTPS://github.com/agfnow/agentflow.git' })
   try {
@@ -234,7 +236,7 @@ test('protected release accepts a clean checkout with a normalized public remote
   }
 })
 
-test('protected --push refuses a mismatched effective push URL before mutation', () => {
+test('protected --push refuses a mismatched effective push URL before mutation', { skip: release_skip }, () => {
   const source_root = make_source()
   const destination = make_destination()
   const push_target = make_temp('agentflow-release-push-target')

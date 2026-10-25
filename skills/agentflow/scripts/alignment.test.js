@@ -7,10 +7,11 @@ const path = require('node:path')
 const { schema_version } = require('./ag-settings.js')
 
 const repo_root = path.resolve(__dirname, '..', '..', '..')
+const source_repo_skip = relative_path => fs.existsSync(path.join(repo_root, relative_path)) ? false : `requires source-repository file ${relative_path}, which the published release mirror does not contain`
 const read = relative_path => fs.readFileSync(path.join(repo_root, relative_path), 'utf8')
 const render_public = source => source.replaceAll('{{org}}', 'agfnow').replaceAll('{{repo}}', 'agentflow').replaceAll('{{version}}', read('skills/agentflow/SKILL.md').match(/^  version: "([^"]+)"$/m)[1])
 
-test('public release templates use the validator schema and explain installation readiness', () => {
+test('public release templates use the validator schema and explain installation readiness', { skip: source_repo_skip('release/README.public.md') }, () => {
 	const english = render_public(read('release/README.public.md'))
 	const chinese = render_public(read('release/README.public.zh-tw.md'))
 
@@ -103,7 +104,7 @@ test('active owner-facing Markdown uses the accepted configuration contract', ()
 	assert.doesNotMatch(delegation, /coordinator runs the suite personally, every time/i)
 })
 
-test('current guidance uses live devlog records and public command entry points only', () => {
+test('current guidance uses live devlog records and public command entry points only', { skip: source_repo_skip('release/README.public.md') }, () => {
 	const public_english_readme = read('release/README.public.md')
 	const current_guidance = [
 		'release/README.public.zh-tw.md',
@@ -209,7 +210,7 @@ test('user-facing terminal changes require reusable real-person PTY journeys', (
 	assert.match(skill, /Unit tests and headless process tests do not replace this journey/)
 })
 
-test('active owner documentation explains the cross-check command consistently', () => {
+test('active owner documentation explains the cross-check command consistently', { skip: source_repo_skip('docs/ag-json-doc.md') }, () => {
 	const documents = [
 		'README.md',
 		'docs/ag-json-doc.md',

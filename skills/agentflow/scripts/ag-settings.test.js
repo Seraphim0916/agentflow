@@ -8,6 +8,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
 const settings = require('./ag-settings.js')
+const source_repo_skip = relative_path => fs.existsSync(path.join(path.resolve(__dirname, '../../..'), relative_path)) ? false : `requires source-repository file ${relative_path}, which the published release mirror does not contain`
 
 const make_repo = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ag-settings-')))
 const drop = directory => fs.rmSync(directory, { recursive: true, force: true })
@@ -520,7 +521,7 @@ test('public setting paths use kebab-case and address profile ids', () => {
 	}
 })
 
-test('current public instructions use canonical syntax while private names and rejected examples stay distinguishable', () => {
+test('current public instructions use canonical syntax while private names and rejected examples stay distinguishable', { skip: source_repo_skip('docs/marcom/USAGE.md') }, () => {
 	const inventory = public_instruction_inventory()
 
 	assert.deepEqual(inventory.legacy_occurrences, [], `obsolete public syntax remains:\n${inventory.legacy_occurrences.join('\n')}`)
@@ -1630,7 +1631,7 @@ test('refresh removes native-host from current settings, display, and public cha
 	assert.throws(() => settings.parse_change_lines(['native-host: on']), /unsupported|obsolete/i)
 })
 
-test('refresh active-guide scan contains only the supported current contract', () => {
+test('refresh active-guide scan contains only the supported current contract', { skip: source_repo_skip('docs/ag-json-doc.md') }, () => {
 	const repo_root = path.resolve(__dirname, '../../..')
 	const active_guides = [
 		'skills/agentflow/SKILL.md',
