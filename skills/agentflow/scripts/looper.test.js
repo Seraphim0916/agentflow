@@ -9,6 +9,7 @@ const path = require('node:path')
 const { spawn } = require('node:child_process')
 const { PassThrough } = require('node:stream')
 const test = require('node:test')
+const source_repo_skip = relative_path => fs.existsSync(path.join(path.resolve(__dirname, '../../..'), relative_path)) ? false : `requires source-repository file ${relative_path}, which the published release mirror does not contain`
 
 const { HELP, notebook_round_state, parse_cli, queue_view, render_help, run_looper, workspace_defaults, write_all_sync } = require('./looper')
 const agentflow_settings = require('./ag-settings')
@@ -907,7 +908,7 @@ test('a generated queue derives completion and dependency authority from its fro
   }
 })
 
-test('a generated stream queue derives its worker configuration from the envelope completion path', async () => {
+test('a generated stream queue derives its worker configuration from the envelope completion path', { skip: source_repo_skip('ag.json') }, async () => {
   const dir = make_temp_dir('agentflow-looper-generated-stream-config')
   try {
     const queue = path.join(dir, 'artifacts', 'stream', 'planned')

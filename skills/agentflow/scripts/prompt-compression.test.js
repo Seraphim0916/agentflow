@@ -7,6 +7,7 @@ const test = require('node:test')
 
 const root = path.resolve(__dirname, '../../..')
 const read = relative => fs.readFileSync(path.join(root, relative), 'utf8')
+const source_repo_skip = relative_path => fs.existsSync(path.join(root, relative_path)) ? false : `requires source-repository file ${relative_path}, which the published release mirror does not contain`
 
 test('delegation does not override direct work or prohibit assigned implementation', () => {
 	const guide = read('skills/agentflow/references/delegation.md')
@@ -130,7 +131,7 @@ test('completion does not require or advertise an audit side file', () => {
 	assert.match(completion, /skip-review/)
 })
 
-test('worker output and evaluation evidence retain exact safety boundaries', () => {
+test('worker output and evaluation evidence retain exact safety boundaries', { skip: source_repo_skip('eval/lib/judge-prompt.js') }, () => {
 	for (const name of ['requirements', 'codewalk', 'explore', 'spike', 'spec', 'security-scan', 'acceptance', 'learn']) {
 		const source = read(`skills/agentflow/references/advisors/${name}.md`)
 		assert.match(source, /Self-check:/)

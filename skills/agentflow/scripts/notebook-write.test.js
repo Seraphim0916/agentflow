@@ -7,6 +7,7 @@ const node_os = require('node:os');
 const node_path = require('node:path');
 const node_test = require('node:test');
 const ag_settings = require('./ag-settings.js');
+const host_skip = Object.values(ag_settings.host_markers).flat().some(name => ![undefined, '', '0', 'false'].includes(process.env[name])) ? false : 'requires a running claude or codex host session: no host runtime marker such as CLAUDE_CODE_ENTRYPOINT or CODEX_SESSION_ID is set';
 const { format_local_timestamp } = require('./local-time.js');
 
 const SCRIPT = node_path.join(__dirname, 'notebook-write.js');
@@ -331,7 +332,7 @@ node_test.test('append-wip appends after the target Ask WIPs despite repeated id
   node_assert.equal(node_fs.existsSync(draft), false);
 });
 
-node_test.test('close-round validates and saves runs, Reply, STATUS, and the next Ask with one replacement', () => {
+node_test.test('close-round validates and saves runs, Reply, STATUS, and the next Ask with one replacement', { skip: host_skip }, () => {
   const fixture = close_fixture();
   const first = run_writer_stdin(fixture.root, close_command(), close_input({ runs: [run_event(1, 'A-001', 'focused tests passed')] }));
 
@@ -373,7 +374,7 @@ node_test.test('close-round distinguishes repeated manifest RUNs from notebook R
   node_assert.deepEqual(read_bytes(stored.notebook_file), stored_before);
 });
 
-node_test.test('close-round refuses malformed STATUS, incomplete Reply, failed completion, and stale identity', () => {
+node_test.test('close-round refuses malformed STATUS, incomplete Reply, failed completion, and stale identity', { skip: host_skip }, () => {
   const cases = [
     [close_input({ status: '# STATUS\n\nProject: broken\n' }), /STATUS|candidate completion/i],
     [close_input({ reply_text: '# ← Reply / A-001\n\n## [SUMMARY]\n\n## Questions (batched — each with a suggested default)\n\n- None.\n' }), /Reply|Questions|candidate completion/i],
@@ -406,7 +407,7 @@ node_test.test('close-round refuses malformed STATUS, incomplete Reply, failed c
   }
 });
 
-node_test.test('close-round leaves an old valid notebook when its atomic write fails', () => {
+node_test.test('close-round leaves an old valid notebook when its atomic write fails', { skip: host_skip }, () => {
   const fixture = close_fixture();
   const before = read_bytes(fixture.notebook_file);
   const original = node_fs.renameSync;
@@ -426,7 +427,7 @@ node_test.test('close-round leaves an old valid notebook when its atomic write f
   node_assert.deepEqual(read_bytes(fixture.notebook_file), before);
 });
 
-node_test.test('close-round takes one lock and performs one notebook replacement', () => {
+node_test.test('close-round takes one lock and performs one notebook replacement', { skip: host_skip }, () => {
   const fixture = close_fixture();
   const writer = require('./notebook-write.js');
   const lock_path = `${fixture.notebook_file}.close-round.lock`;
@@ -457,7 +458,7 @@ node_test.test('close-round takes one lock and performs one notebook replacement
   node_assert.equal(notebook_replacements, 1);
 });
 
-node_test.test('close-round preserves a replacement lock pathname during cleanup', () => {
+node_test.test('close-round preserves a replacement lock pathname during cleanup', { skip: host_skip }, () => {
   const fixture = close_fixture();
   const writer = require('./notebook-write.js');
   const lock_path = `${fixture.notebook_file}.close-round.lock`;
@@ -504,7 +505,7 @@ node_test.test('close-round refuses lock contention without changing notebook by
   }
 });
 
-node_test.test('close-round remains old-or-new if the process fails after rename', () => {
+node_test.test('close-round remains old-or-new if the process fails after rename', { skip: host_skip }, () => {
   const fixture = close_fixture();
   const writer = require('./notebook-write.js');
   const original = node_fs.renameSync;
@@ -845,7 +846,7 @@ node_test.test('append-reply closes only the exact final Ask and creates the nex
   node_assert.equal(node_fs.existsSync(node_path.join(root, draft_path)), false);
 });
 
-node_test.test('append-reply refuses a candidate with missing checkpoint evidence before replacement', () => {
+node_test.test('append-reply refuses a candidate with missing checkpoint evidence before replacement', { skip: host_skip }, () => {
   const fixture = setup({
     text: notebook({ body: `+ request\n\n${checkpoint(1, 'A-001')}` })
   });
@@ -938,7 +939,7 @@ node_test.test('close input rejects alternate field names and raw STATUS text wi
   }
 });
 
-node_test.test('closed retry matcher rejects retired runs alias and accepts canonical run_events', () => {
+node_test.test('closed retry matcher rejects retired runs alias and accepts canonical run_events', { skip: host_skip }, () => {
   const writer = require('./notebook-write.js');
   const fixture = close_fixture();
   const input = JSON.parse(close_input());
@@ -978,7 +979,7 @@ node_test.test('suffix-free drafts use the selected Ask and preserve legacy reco
   }
 });
 
-node_test.test('close publishes sidecar evidence before notebook and missing records fail later checks', () => {
+node_test.test('close publishes sidecar evidence before notebook and missing records fail later checks', { skip: host_skip }, () => {
   const fixture = close_fixture();
   const config = JSON.parse(node_fs.readFileSync(node_path.join(fixture.root, 'ag.json'), 'utf8'));
   config.switches['target-doc'] = fixture.notebook_path;
@@ -1005,7 +1006,7 @@ node_test.test('close publishes sidecar evidence before notebook and missing rec
   node_assert.ok(checked.checks.some(c => c.status === 'fail' && /records unavailable/i.test(c.detail)));
 });
 
-node_test.test('append-reply publishes metadata and record-write failure leaves notebook unchanged', () => {
+node_test.test('append-reply publishes metadata and record-write failure leaves notebook unchanged', { skip: host_skip }, () => {
   for (const fail_write of [false, true]) {
     const fixture = close_fixture();
     const reply = JSON.parse(close_input()).reply + '\n```completion-metadata\nHost review: PASS — checked append fixture.\n```\n';

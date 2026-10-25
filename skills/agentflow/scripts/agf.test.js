@@ -9,6 +9,7 @@ const { execFileSync, spawnSync } = require('node:child_process')
 
 const agf = require('./agf.js')
 const ag_settings = require('./ag-settings.js')
+const host_skip = Object.values(ag_settings.host_markers).flat().some(name => ![undefined, '', '0', 'false'].includes(process.env[name])) ? false : 'requires a running claude or codex host session: no host runtime marker such as CLAUDE_CODE_ENTRYPOINT or CODEX_SESSION_ID is set'
 const setup = require('./setup.js')
 const install_hook = require('./install-hook.js')
 const { format_local_timestamp } = require('./local-time.js')
@@ -460,7 +461,7 @@ test('start keeps an interrupted startup conservative when its lock is still pre
 	}
 })
 
-test('settings forwards show and validation through agf with empty stdout', () => {
+test('settings forwards show and validation through agf with empty stdout', { skip: host_skip }, () => {
 	const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-settings-')))
 	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
 	const logs = []
@@ -514,7 +515,7 @@ test('finish help receives the dispatcher terminal width', () => {
 	assert.equal(logs.join(''), agf.render_usage(40))
 })
 
-test('init creates the configured notebook, ignore entries, and project hooks in one repeatable action', () => {
+test('init creates the configured notebook, ignore entries, and project hooks in one repeatable action', { skip: host_skip }, () => {
 	const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agf-init-')))
 	execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
 	const logs = []
@@ -831,7 +832,7 @@ test('close and stop hook agree on the first commit with a persisted language se
 	}
 })
 
-test('close reviews captured candidate files before replacing the notebook or committing', () => {
+test('close reviews captured candidate files before replacing the notebook or committing', { skip: host_skip }, () => {
 	for (const kind of ['source', 'configuration']) {
 		const fixture = close_fixture()
 		try {
