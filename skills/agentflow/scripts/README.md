@@ -10,9 +10,21 @@ grades the applicable notebook and host-owned facts, asks for at most one
 correcting turn, and fails open on its own internal errors. A passing verdict is
 not a general guarantee that code or a model claim is honest.
 
+## Message controls
+
+Start a submitted message with unquoted `no-ag`, alone or followed by a task separated by a space, colon or comma. The prompt hook bypasses capture; Stop uses the current prompt or latest owner message from that session's transcript. It never reuses a cached bypass marker. Without usable current input, ordinary checks remain. `no-ag` has no saved-round review-waiver behavior. Single/double quotes, backticks, fenced examples and multiline quotations cannot activate bypass, pipeline controls or review waivers. The next ordinary message resumes Agentflow.
+
 ## Active scripts
 
+- **`fast-lane.js`** — parses current-Ask `fast-lane` and `skip-ag` commands from owner input, ignoring quoted examples and mentions. `skip-ag` disables only the development pipeline and advisors; normal review, execution, stream, notebook and delivery rules remain. Both controls expire at the next Ask, and neither changes project settings.
+
 - **`round-linter.js`** — host-neutral, no-AI validation of a completed round. Its `cross_check` gate refuses a completed implementation unless the named current-Ask report is a bounded regular file with standard worker boundaries, exactly one PASS each for Outcome, Minimality, and Conformance plus one overall PASS verdict, and the same final implementation commit recorded by the round. Matching pipeline acceptance may supply that report. Exact current-Ask `skip-review: <accepted tradeoff>` skips this review only. A valid report stamp with a different model or effort produces a warning. The gate does not request a model review for first-time Agentflow bookkeeping when Git proves that the repository has no product files and only Agentflow records, the bootstrap `ag.json`, and `.gitignore` were created.
+
+- **Review evidence:** `completion-record.js` validates one version-1 `Review record:` JSON line for `external-review`, `native-review`, or `host-review`, including exact source identity, report, Outcome/Minimality/Conformance verdicts, independence facts, limitations, and transport facts. The line is mutually exclusive with legacy Cross-check and Host review lines. `completion-context.js` supplies effective `allowed-worker` and `review-policy`; host fallback is accepted only after separate-review unavailability is recorded.
+
+- **Notebook ownership:** `notebook-ownership: on|off` is optional and defaults to `off`, including when omitted. On gives one session control of an active notebook round; off allows sessions to mix messages, decisions and replies. Both modes retain file locks, safe paths, current-round checks, unchanged snapshots and stream routing. Off preserves existing ownership records. Use `notebook-ownership: on` when a notebook may be shared. Turning it back on may require explicit recovery of a retained record; no noticeable startup speed gain has been proven.
+
+- **Review-only completion:** Explicit review controls may include a separate `godev`, a nonempty `target: ...`, supported `reviewer: codex|claude` or `reviewer 用 codex|claude` selection on its own line or after a comma, and the exact continuation `authorize takeover and continue the review` or `授權接管並繼續審查`. Completion preserves BLOCKING or UNRESOLVED findings; it does not accept the product. Unknown prose, quoted commands and mixed implementation requests do not qualify. Captured Git scope, source identity, report integrity and required independence still apply.
 
 - **`terminal-preflight.js`** — coordinator-run recovery wrapper around the complete round linter. The Reply writer and `agf close` run the same candidate checks before notebook replacement. Use this wrapper only when a manual or recovery path does not use `agf close`; do not repeat it after a successful one-command closeout.
 
@@ -24,7 +36,7 @@ not a general guarantee that code or a model claim is honest.
   malformed current-checkpoint `Still to do:` presentation is a warning when
   the underlying completion evidence is present.
 
-- **`stop-hook.js`** — the independent final host check. It reads the real clock and repository push state, supplies transcript terminal output when a devlog was edited, and exits `2` only when the linter returned a failure. A failure keeps the current round open for repair; it does not ask the host to create a new owner-looking Ask. `stop_hook_active` exits `0` so one correction cannot trap a session in a loop. A valid `AGENTFLOW_EXTERNAL_DELEGATE` marker bypasses owner-round checks; the launcher remains responsible for provenance and isolation.
+- **`stop-hook.js`** — the independent final host check. A verified completed round is accepted after checking its close receipt, exact commit, and saved Reply, even if working files change later. Other completed rounds still receive the normal lint check. It reads the real clock and repository push state, supplies transcript terminal output when a devlog was edited, and exits `2` only when a completed round fails the linter. An unfinished round produces repair warnings without blocking the active turn. A failure keeps the current round open for repair; it does not ask the host to create a new owner-looking Ask. `stop_hook_active` exits `0` so one correction cannot trap a session in a loop. A valid `AGENTFLOW_EXTERNAL_DELEGATE` marker bypasses owner-round checks; the launcher remains responsible for provenance and isolation.
 
 - **`ag-settings.js`** — the shared settings module and CLI. It resolves the
   adjacent configuration, rejects duplicate or malformed JSON, validates the
@@ -33,9 +45,13 @@ not a general guarantee that code or a model claim is honest.
   worker tiers. Configuration values are data and are never evaluated as shell
   text.
 
-  The current configuration is Version 7.
+  The current configuration is Version 8. Existing Version 7 files migrate atomically when opened, using the conservative JSON value `["external", "host"]` and `require-independent` posture until explicitly opted in.
 
-  The public root keys are exactly `schema-version`, `switches`, `pipeline-roles`, and `external-workers`. The public switch keys are exactly `target-doc`, `workspace-dir`, `cli-provider`, `auto-reply`, `lang`, `streams`, `ask-names`, `allow-ag`, `metrics`, and `large-work-minutes`.
+  The public root keys are exactly `schema-version`, `switches`, `pipeline-roles`, and `external-workers`. The required public switch keys are `target-doc`, `workspace-dir`, `allowed-worker`, `review-policy`, `cli-provider`, `auto-reply`, `lang`, `streams`, `ask-names`, `allow-ag`, and `large-work-minutes`; optional controls are `away-gates`, `git-timeout-ms`, `log-verbosity`, `inline-reply`, `notebook-ownership`, `completion-cleanup`, and `completion-cleanup-interval-days`.
+
+  `away-gates` accepts `on` or `off` and defaults to `off`; `on` supplies Design Go and Result Go after normal evidence passes. `git-timeout-ms` accepts a positive integer in milliseconds and defaults to `30000`. A valid positive-integer `AGF_GIT_TIMEOUT_MS` value overrides the project setting; otherwise Agentflow uses the project value and then the default. `log-verbosity` accepts `off`, `wip`, or `all` and defaults to `all`; `inline-reply` accepts `on` or `off` and defaults to `off`; `notebook-ownership` accepts `on` or `off` and defaults to `off`; `completion-cleanup` accepts `on` or `off` and defaults to `off`; and `completion-cleanup-interval-days` accepts an integer from 1 through 365 and defaults to `7`.
+
+  `allowed-worker` is a nonempty unordered JSON permission array containing unique `external`, `internal`, and `host` values; its order has no execution meaning. `review-policy` is `prefer-independent` or `require-independent`. `cli-provider` filters only external profiles; unknown host family never matches `off`.
 
   Each worker profile has `id`, `command`, `priority`, and `tiers`, with an
   optional `family`. Tiers always include `best`, `better`, `basic`, and
@@ -52,10 +68,9 @@ not a general guarantee that code or a model claim is honest.
   agf settings rename --from devlog.md --to features/ag/ag.devlog.md
   ```
 
-- **`resume-intake.js`** — one bounded local command for the first `godev` response. It validates adjacent configuration, returns STATUS, the final unresolved Ask, branch, and changed paths, and returns a `stream_decision` with one of `none`, `owner_input_only`, `bootstrap_files_only`, or `foreign_or_parallel_work`. It never fetches, reads the archive, installs hooks, or writes files.
+- **`resume-intake.js`** — one bounded local command for the first `godev` response. It validates adjacent configuration, returns STATUS, the final unresolved Ask, branch, and changed paths, and returns a `stream_decision` with one of `none`, `owner_input_only`, `bootstrap_files_only`, or `foreign_or_parallel_work`. It never fetches, reads the archive, or installs hooks; opening a valid v7 configuration performs its atomic v8 migration.
 
-- **`delegation-route.js`** — validates the evidence record for the unified
-  external worker.
+- **`delegation-route.js`** — the transport-neutral policy boundary. `select_executor_action(facts)` returns one external-runner, native-tool, host-direct, or unsatisfied action; `next_executor_action(facts, settled_attempt)` advances only after a settled `unavailable` attempt; `validate_execution_record(record, context)` validates common external, internal, and host attempt evidence while retaining legacy external records.
 
 - **`external-runner.js`** — executes one literal command in an independent
   no-remote Git clone and returns bounded output, result-file facts, clone
@@ -73,11 +88,9 @@ not a general guarantee that code or a model claim is honest.
 
 - **`looper-live-gate.js`** — creates a disposable Git repository, installs and invokes the real shell shortcut, and runs two low-cost provider plans. It is the mandatory final gate for every change that can alter looper behavior. Success requires a zero process exit, both exact product files, two completed notebook rounds, and both plans archived in `planned/done/`.
 
-- **`metrics.js`** — optionally writes validated metrics history and evaluates
-  an evidence window. It writes no history when `metrics` is `off`, preserves
-  unavailable provider fields as `unavailable`, and never changes routing.
+- **`agf.js`** — the unified owner-facing command. It provides `start`, initialization, setup, hook management, settings, feature-stream work, and safe removal with focused subcommand help. `start --repo <path> --host <safe-id> [--host-family <known-family>] --message-stdin --json` resolves or initializes the project, records one exact owner message only in an empty Ask, runs intake, and returns structured startup facts without committing. Generic hosts report `hooks: not_available` with manual capture and closeout instructions. Claude reports `session_id` and `hooks.prompt_capture: manual`, retains Stop and startup capture, and manually saves later actual owner messages. Codex keeps automatic capture. `init` refuses empty or structurally damaged established notebooks; restore from Git/backup or repair explicitly without losing history. `agf-looper` intentionally remains standalone. Internal validation and writing scripts are not public command families. Stream actions do not write the root notebook or replace a protocol round with an unrecorded direct Git sequence.
 
-- **`agf.js`** — the unified owner-facing command. It provides `start`, initialization, setup, hook management, settings, feature-stream work, and safe removal with focused subcommand help. `start --repo <path> --host <codex|claude> --message-stdin --json` resolves or initializes the project, records one exact owner message only in an empty Ask, runs intake, and returns structured startup facts without committing. `agf-looper` intentionally remains standalone. Internal validation and writing scripts are not public command families. Stream actions do not write the root notebook or replace a protocol round with an unrecorded direct Git sequence.
+- **`stream-cleanup.js`** — cleanup's narrow local-file inspection and recovery copy. Known stream receipts, released ownership, completion evidence, pure Agentflow hook files and Finder metadata are preserved under the shared Git directory before worktree removal. Unknown files, active ownership, symbolic links and changed snapshots refuse removal. See [stream cleanup and recovery](../references/streams.md#cleanuptaskkey).
 
 - **`notebook-write.js`** — the bounded notebook writer. Keep `append-run`, `append-wip`, and `append-reply` for long-running work. Use `close-round --notebook <path> --input-stdin` with one JSON object containing `ask`, ordered `run_events`, complete `reply`, and `status` or `status_fields` when the whole round is ready; it validates the candidate and replaces the notebook once.
 
@@ -85,9 +98,11 @@ not a general guarantee that code or a model claim is honest.
   `agf hooks --project`. It protects the root notebook and configuration
   from being staged on a feature branch.
 
-- **`install-hook.js`** — installs or removes the Claude Code and Codex Stop and UserPromptSubmit hooks and the project pre-commit guard. It preserves backups and avoids duplicates. Restart the host after installation so it loads the input hook. Input capture errors block submission with a visible explanation; the Stop referee still fails open on its own internal errors.
+- **`install-hook.js`** — installs or removes both native Stop hooks, Codex UserPromptSubmit and the project pre-commit guard; removes verified owned Claude UserPromptSubmit entries in the selected project/global scope. It preserves backups and avoids duplicates; generic hosts do not receive another host's hooks. Restart after settings change. Claude uses manual append-input with its startup notebook/session for actual owner messages only; stale Claude prompt events silently do nothing. Update older global installations separately. Generic hookless hosts use manual capture and closeout. Input capture errors are reported in the hook handoff and do not block submission; the Stop referee still fails open on its own internal errors.
 
-- **`codex-live-journey.js`** — an opt-in, model-backed interactive terminal check. `node scripts/codex-live-journey.js --run [model]` creates a disposable repository, tests activation and a correction sent during work, and checks the resulting file, notebook, commit, and clean checkout. It retains the terminal transcript and result beside the test repository. It requires Codex login and macOS Expect, and uses paid model calls; it does not run with the normal unit tests.
+- **`codex-live-journey.js`** — an opt-in, model-backed interactive terminal check. From this directory, run `node codex-live-journey.js --run [model/effort]`; the default is `gpt-6.1-sol/medium`. It creates a disposable repository, tests activation and a correction sent during work, and checks the resulting file, notebook, commit, and clean checkout. Add `--resume` after the model/effort to test a request saved in the notebook across `/clear`. Startup handles folder trust and removes inherited host/session markers. It retains the terminal transcript and result beside the test repository. It requires Codex login and Unix Expect, and uses paid model calls; it does not run with the normal unit tests.
+
+- **`claude-live-journey.js`** — an opt-in, model-backed Claude Code terminal check. From this directory, run `node claude-live-journey.js --run` and `node claude-live-journey.js --run --codex-first`. Each creates a fresh repository under `~/jxtmp/`, tests activation, a correction during work, session restart/resume, three locally committed rounds, logging and Reply display settings, notebook ownership, exact-session model/effort stamps, hook errors and a clean checkout. The second starts with Codex configuration and checks that Claude adds its hooks while preserving Codex hooks. Both retain terminal transcripts and JSON results beside the repository, require Claude login and Unix Expect, and use paid model calls. Parent host markers are removed before launching the nested CLI.
 
 - **`setup.js`** — checks Node, Git, the skill files, the user's `agf()` and `agf-looper()` shell functions, and `AGF_OPEN`; `--fix` prefers usable `$HOME/.agents/...`, `$HOME/.codex/...`, and `$HOME/.claude/...` installations in that order, then falls back to the verified active skill directory for a plugin-only installation without guessing cache paths. It accepts an existing managed shortcut to any usable matching installation despite indentation differences and replaces only a recognised stale Agentflow shortcut.
 
@@ -98,8 +113,7 @@ not a general guarantee that code or a model claim is honest.
 Claude Code and Codex use the same Stop-hook contract: JSON on stdin with a
 working directory, `stop_hook_active`, and optional transcript path; exit `2`
 blocks the turn. The installed command carries its owning host explicitly.
-Other clients can call the same Node entry points when they can provide the
-documented facts.
+Other clients can call the same Node entry points when they can provide the documented facts. A generic host supplies a safe ID, optional known family, file/command tools, and enough state retention for capture and closeout; its hook status is `not_available`, and it must run manual capture with `--host <safe-id>` and `agf close` under the skill instructions. An unknown or conflicting automatic identity is never guessed as Codex or Claude.
 
 The canonical host startup command is the direct Node entry point below. The
 active host supplies the complete `<active-agentflow-skill-dir>` value; do not
@@ -107,7 +121,7 @@ probe a shell function or guess a `~/.claude` or `~/.codex` path. Send the
 owner's exact message through standard input:
 
 ```text
-node <active-agentflow-skill-dir>/scripts/agf.js start --repo <repo> --host <codex|claude> --message-stdin --json
+node <active-agentflow-skill-dir>/scripts/agf.js start --repo <repo> --host <safe-id> [--host-family <known-family>] --message-stdin --json
 ```
 
 The JSON result includes `repository`, `notebook`, `active_host`, `git`,
@@ -166,8 +180,16 @@ numbers, integers, strings, and arrays must retain their declared JSON types.
 
 ## Tests
 
-Run from this directory:
+These tests are for contributors validating development changes. Installing or using Agentflow does not require running the developer test suite. Platform-independent tests run on native Windows. Tests that execute Unix shell/shebang fixtures, require FIFO or open-file replacement semantics, inspect Unix process tables, or use PTY tools skip with an explicit reason where those facilities are unavailable. The looper currently requires POSIX private file modes and process containment; its dependent integration tests skip on Windows, while a Windows test verifies refusal before launching a worker. These skips do not establish native Windows looper support. The private development checkout verifies Windows with Node 24 through `.github/workflows/windows-tests.yml`; its full result remains visible, including unrelated baseline failures.
+
+Run from `skills/agentflow/scripts`:
 
 ```text
-node --test ag-settings.test.js agf.test.js alignment.test.js completion-context.test.js cross-check-plan.test.js delegation-route.test.js devlog-guard.test.js external-runner.test.js install-hook.test.js looper.test.js metrics.test.js prompt-compression.test.js queue-contract.test.js release.test.js resume-intake.test.js round-linter.test.js setup.test.js start-journey.test.js stop-hook.test.js suite-evidence.test.js terminal-preflight.test.js terminal.test.js notebook-write.test.js
+node --test *.test.js
 ```
+
+- **`threeways-tier-journey.js`** — run `node threeways-tier-journey.js` in a real terminal/PTY to verify the optional 3ways tier setting, legacy read compatibility, unchanged other roles, visible settings output, and rejection of `off`. Uses a temporary configuration and makes no model calls.
+
+- `node review-only-journey.js` in a real terminal verifies truthful review-only closeout and the stop hook using synthetic reviewer evidence, including rejection of a later product change. No model calls are made.
+
+- **Archive retention notices:** startup JSON and prompt capture return `compaction.blocked` with the retained Ask and reason, plus recovery guidance. Duplicate input and bare activation retain the notice. Verify complete saved answers before the existing `compact --include-answered true` override; unresolved history remains live.

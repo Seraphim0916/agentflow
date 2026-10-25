@@ -1,10 +1,12 @@
-# Agentflow v8.2.0
+# Agentflow v8.4.15
+
+This repository preserves **Agentflow 8**. Stable Agentflow 9 uses [agfnow/agentflow](https://github.com/agfnow/agentflow). To keep v8, explicitly install from `agfnow/agentflow-v8`; rebind existing installations that still record the old repository URL before running updates. V8 and v9 share the `agentflow` skill/plugin name: use one active version per host/project.
 
 **English** · [繁體中文](README.zh-tw.md)
 
 Give your AI assistant a project notebook, so tomorrow’s conversation can pick up today’s work.
 
-Agentflow works with **Codex and Claude Code**. It keeps your requests, decisions, progress, and results in a readable file. You can use it to improve a document, fix a bug, or carry a larger project across several sessions.
+Agentflow has verified integrations for **Codex and Claude Code** and a portable core for any host that provides file and command tools plus enough state retention for capture and closeout. It keeps your requests, decisions, progress, and results in a readable file. You can use it to improve a document, fix a bug, or carry a larger project across several sessions.
 
 - **Start simply:** Type `godev`, then describe the task in your own words.
 
@@ -12,27 +14,31 @@ Agentflow works with **Codex and Claude Code**. It keeps your requests, decision
 
 - **Get help quickly:** Ask your agent, “How do I use the Agentflow skill for this task?” It can explain the controls using your actual project.
 
+- **Discuss possible work first:** Say, “Could we replace the provider? Discuss with me first.” The assistant records the possible task and what decision it needs, discusses your options, then asks a specific question in the saved Reply. Answer in chat or its `ans:` field. Recording an idea does not authorize implementation; rejected or deferred ideas stay recorded, and already-authorized work continues.
+
+Automatic archiving reports when an older answer or request keeps history in the live notebook. The assistant must recover and verify complete saved answers before overriding that protection; unresolved items stay live.
+
 ## Install
 
-You need Node.js 18 or newer and a working Codex or Claude Code installation. Git is needed for version history, feature workspaces, and some installation methods. Ordinary notebook work can use a folder that is not a Git repository.
+You need Node.js 18 or newer and a host with file and command tools. Codex and Claude provide verified hooks; a generic host uses an explicit safe ID, optional known family, and manual capture/closeout because hooks are not available. Git is needed for version history, feature workspaces, and some installation methods. Ordinary notebook work can use a folder that is not a Git repository.
 
 Run this in a terminal and choose your assistant and installation scope:
 
 ```sh
-npx skills add agfnow/agentflow
+npx skills add agfnow/agentflow-v8
 ```
 
 For the Claude Code plugin route, add the marketplace in Claude Code:
 
 ```text
-/plugin marketplace add agfnow/agentflow
+/plugin marketplace add agfnow/agentflow-v8
 ```
 
 Then install the `agentflow` plugin from that marketplace. Plugin updates follow your [Claude Code marketplace update settings](https://code.claude.com/docs/en/discover-plugins#configure-auto-updates). Start a new assistant session after installation or updates.
 
 ## Choose the main model
 
-For Codex, the Agentflow maintainer recommends **`gpt-5.6-sol/low` as the most stable coordinator choice in their use**: model `gpt-5.6-sol`, reasoning effort `low`. The coordinator is the assistant you talk to; it organizes the task and checks the result. This recommendation does not change your model settings automatically. [Official model reference](https://developers.openai.com/api/docs/models/gpt-5.6-sol).
+For Codex, we recommend **`gpt-6.1-sol/medium` as the most stable coordinator choice in their use**: model `gpt-6.1-sol`, reasoning effort `medium`. The coordinator is the assistant you talk to; it organizes the task and checks the result. This recommendation does not change your model settings automatically. [Official model reference](https://developers.openai.com/api/docs/models/gpt-6.1-sol).
 
 ## Keep it updated
 
@@ -42,7 +48,7 @@ If you installed through `npx skills add`, periodically run:
 npx skills update agentflow
 ```
 
-The [Skills CLI](https://github.com/vercel-labs/skills#skills-update) takes the installed skill name for updates. `agfnow/agentflow` is the installation source, so `npx skills update agfnow/agentflow` is not the current name-based update syntax. Add `-g` for global installs, or run from the project with `-p` for project installs.
+The [Skills CLI](https://github.com/vercel-labs/skills#skills-update) takes the installed skill name for updates. `agfnow/agentflow-v8` is the installation source, so `npx skills update agfnow/agentflow-v8` is not the current name-based update syntax. Add `-g` for global installs, or run from the project with `-p` for project installs.
 
 We recommend a weekly **crontab** job on macOS or Linux if you want automatic updates. Ask your agent to set it up for your installation. The [guide](skills/agentflow/docs/AG_GUIDE.md#keep-the-skill-up-to-date) includes a Monday-morning example, explicit paths, and logging.
 
@@ -56,9 +62,17 @@ Rewrite the welcome page for someone visiting for the first time.
 Keep the existing links. Let me review the result before uploading it.
 ```
 
-Small tasks can stay simple. `fast-lane` keeps one task with the main assistant and skips external review while retaining necessary checks and self-review. `cross-check` requests an independent review of finished work. `ag` requests the full development process when the project’s `allow-ag` setting permits it.
+Small tasks can stay simple. `fast-lane` keeps one task with the main assistant and skips separate review while retaining necessary checks and self-review. `cross-check` requests a separate review of finished work; `review-policy: prefer-independent` permits a clearly labelled host review only after separate-review unavailability, while `require-independent` stays strict. `ag` requests the full development process when the project’s `allow-ag` setting permits it.
+
+`skip-ag [task]` or `/skip-ag [task]` skips the development pipeline and its advisors for the current Ask while keeping devlog records, necessary checks, normal independent review, ordinary delegation, and stream rules. It leaves project settings unchanged and expires when the Ask closes. A bare command waits for a task. Unquoted `no-ag [task]`, `no-ag: [task]` or `no-ag, [task]` skips the entire Agentflow protocol for that submitted message, including notebook capture and closeout. Quoted mentions and conditional statements do not activate it; the next ordinary message resumes the workflow; `fast-lane` also skips delegation, new streams, and independent review.
 
 The notebook keeps the conversation, so a fresh session can resume an unfinished request with `godev`. With Git, Agentflow normally commits completed work and pushes when a remote exists; tell it when you want local work only.
+
+## Shared notebooks
+
+`notebook-ownership: on|off` is optional and defaults to `off`, including when omitted. On gives one session control of an active notebook round; off allows sessions to mix messages, decisions and replies. Both modes retain file locks, safe paths, current-round checks, unchanged snapshots and stream routing. Off preserves existing ownership records. Use `notebook-ownership: on` when a notebook may be shared. Turning it back on may require explicit recovery of a retained record; no noticeable startup speed gain has been proven.
+
+Codex records later owner messages automatically. Claude keeps startup capture and its completion-checking Stop hook, but the assistant must manually save later actual owner messages using the startup `session_id`; generated reports must not enter the Ask. Updating setup removes owned Claude prompt hooks in the selected scope. Older global installations need their own update and hook migration; restart when prompted.
 
 ## Check installation
 
@@ -80,14 +94,22 @@ node "$HOME/.claude/skills/agentflow/scripts/setup.js"
 
 </details>
 
+## Windows and contributor tests
+
+- Installation does not require running the regression suite. Contributors can find the test commands in the [script reference](skills/agentflow/scripts/README.md).
+
+- Portable core tests are verified on native Windows with Node.js 24. Tests requiring Unix terminals or process controls are explicitly skipped. The background looper is not supported on native Windows.
+
 ## Read next
 
 - [Everyday user guide](skills/agentflow/docs/AG_GUIDE.md), with the YouTube introduction.
 
 - [繁體中文使用指南](skills/agentflow/docs/AG_GUIDE.zh-tw.md).
 
+- [Brief for a new assistant](skills/agentflow/docs/agent-brief.md), for orientation before using the installed skill.
+
 - [Changelog](CHANGELOG.md), newest version first.
 
 - [Script reference](skills/agentflow/scripts/README.md), for technical setup and recovery.
 
-Project settings live in `ag.json`, using the version-7 configuration format. Type `settings` to inspect them. That format number is separate from the Agentflow release version; model profiles live under `external-workers`, and advisor choices under `pipeline-roles`.
+Project settings live in `ag.json`, using the version-8 configuration format. Type `settings` to inspect them. Startup fills properties missing from the latest template and reports invalid saved values with suggestions; it asks before changing any wrong value. Unsafe invalid settings still stop startup. Existing v7 files migrate conservatively when opened. `allowed-worker` is an unordered permission list of external, internal, and host routes; its order has no execution meaning. `cli-provider` filters only external profiles. Model profiles live under `external-workers`, and advisor choices under `pipeline-roles`.

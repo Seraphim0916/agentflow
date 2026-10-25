@@ -11,6 +11,8 @@ const { collect } = require('./completion-context.js');
 const { collect_intake } = require('./resume-intake.js');
 const { lint_round } = require('./round-linter.js');
 const { format_local_timestamp } = require('./local-time.js');
+const ownership_fixture = require('./fixtures/notebook-owner');
+ownership_fixture.configure();
 
 const reply = () => `# ← Reply / A-001\n\n* _${format_local_timestamp()} (test/none)_\n\n## [SUMMARY]\n\n- Done.\n\n## [FINAL REPORT]\n\n- Host gate: PASS.\n\n- Host review: PASS — inspected fixture source and test evidence; no blocking findings.\n\n## Questions (batched — each with a suggested default)\n\n- None.\n\n---\n\n# → Ask / A-002\n\n+\n`;
 const fixture = t => {
@@ -35,20 +37,60 @@ const fixture = t => {
   git(['commit', '-qm', 'fixture']);
   fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = true;\n');
   const facts = text => collect({ project_root: root, notebook_path: '.agentflow/devlog.md', active_host: 'codex', devlog_text: text, require_status_projection: true });
-  const hook = (host, input = {}) => spawnSync(process.execPath, [path.join(__dirname, 'stop-hook.js'), '--host', host], { cwd: root, input: JSON.stringify({ cwd: root, hook_event_name: 'Stop', ...input }), encoding: 'utf8', env: { ...process.env, AGENTFLOW_EXTERNAL_DELEGATE: '' } });
+  const hook = (host, input = {}) => spawnSync(process.execPath, [path.join(__dirname, 'stop-hook.js'), '--host', host], { cwd: root, input: JSON.stringify({ cwd: root, hook_event_name: 'Stop', ...input }), encoding: 'utf8', env: { ...process.env, AGENTFLOW_EXTERNAL_DELEGATE: '', CLAUDE_PROJECT_DIR: '', CLAUDE_SESSION_ID: '' } });
   return { root, write, facts, hook };
 };
+
+test('skip-ag survives capture and resume without changing settings or waiving review', t => {
+  const f = fixture(t);
+  const before = fs.readFileSync(path.join(f.root, 'ag.json'));
+  const capture = f.hook('claude', { hook_event_name: 'UserPromptSubmit', prompt: 'skip-ag', session_id: ownership_fixture.session, turn_id: 'skip-one' });
+  assert.equal(capture.status, 0, capture.stderr);
+  assert.equal(capture.stdout, '');
+  require('./notebook-write').append_input({ root: f.root, notebook: '.agentflow/devlog.md', text: 'skip-ag', host: 'claude', session: ownership_fixture.session });
+  assert.equal(collect_intake({ repo_root: f.root }).skip_ag.state, 'pending');
+  f.hook('codex', { hook_event_name: 'UserPromptSubmit', prompt: 'fix the login bug', session_id: ownership_fixture.session, turn_id: 'skip-two' });
+  assert.equal(collect_intake({ repo_root: f.root }).skip_ag.state, 'active');
+  assert.deepEqual(fs.readFileSync(path.join(f.root, 'ag.json')), before);
+  fs.writeFileSync(path.join(f.root, 'task.js'), 'module.exports = true;\n');
+  assert.equal(f.facts(f.write('+ skip-ag fix the login bug', true)).review_decision.status, 'required');
+});
+
+test('skip-ag waives pipeline gates while retaining review, execution and notebook integrity', t => {
+  const f = fixture(t);
+  const text = f.write('+ skip-ag fix the login bug', true);
+  const facts = f.facts(text);
+  const result = lint_round({ ...facts, pipeline: {}, large_work: {}, queue_contract: {}, security: {}, acceptance: {}, quality_gate: {}, executor_decision: {} });
+  for (const id of ['pipeline_artifacts', 'large_work_route', 'queue_contract', 'security_disposition', 'acceptance_disposition', 'quality_gate']) assert.equal(result.checks.find(c => c.id === id).status, 'skip', id);
+  assert.equal(result.checks.find(c => c.id === 'cross_check').status, 'fail');
+  assert.equal(result.checks.find(c => c.id === 'executor_decision').status, 'fail');
+  const pending = lint_round(f.facts(f.write('+ skip-ag', true)));
+  assert.equal(pending.checks.find(c => c.id === 'skip_ag_task').status, 'fail');
+  const bad_route = lint_round({ ...facts, route_decision: { route: 'full_pipeline' } });
+  assert.equal(bad_route.checks.find(c => c.id === 'route_decision').status, 'fail');
+});
+
+test('skip-ag ignores explanatory examples and expires with its Ask', t => {
+  const f = fixture(t);
+  const { parse_skip_ag } = require('./fast-lane');
+  for (const text of ['+ explain skip-ag', '+ `skip-ag`', '+ > skip-ag', '+ skip-ag: on', '+ do not use skip-ag', '+ ```\n  skip-ag\n  ```']) assert.equal(parse_skip_ag(text), null, text);
+  const ended = f.write('+ skip-ag fix the login bug', true);
+  const next = ended + '\n+ normal task\n';
+  fs.writeFileSync(path.join(f.root, '.agentflow/devlog.md'), next);
+  assert.equal(collect_intake({ repo_root: f.root }).skip_ag, undefined);
+  assert.equal(f.facts(next).review_decision.status, 'required');
+});
 
 test('fast-lane survives prompt capture and resume without changing configuration or opening a stream', t => {
   const f = fixture(t);
   const before = fs.readFileSync(path.join(f.root, 'ag.json'), 'utf8');
-  const capture = f.hook('codex', { hook_event_name: 'UserPromptSubmit', prompt: 'fast-lane', session_id: 'test', turn_id: 'one' });
+  const capture = f.hook('codex', { hook_event_name: 'UserPromptSubmit', prompt: 'fast-lane', session_id: ownership_fixture.session, turn_id: 'one' });
   assert.equal(capture.status, 0, capture.stderr);
   assert.match(capture.stdout, /fast-lane.*pending/i);
   let intake = collect_intake({ repo_root: f.root });
   assert.equal(intake.fast_lane.state, 'pending');
   assert.equal(intake.stream_decision.open_new_stream, false);
-  const followup = f.hook('codex', { hook_event_name: 'UserPromptSubmit', prompt: 'fix the login bug', session_id: 'test', turn_id: 'two' });
+  const followup = f.hook('codex', { hook_event_name: 'UserPromptSubmit', prompt: 'fix the login bug', session_id: ownership_fixture.session, turn_id: 'two' });
   assert.equal(followup.status, 0, followup.stderr);
   assert.match(followup.stdout, /fast-lane.*active/i);
   intake = collect_intake({ repo_root: f.root });
@@ -56,6 +98,24 @@ test('fast-lane survives prompt capture and resume without changing configuratio
   assert.equal(fs.readFileSync(path.join(f.root, 'ag.json'), 'utf8'), before);
   assert.equal(fs.existsSync(path.join(f.root, '.worktrees')), false);
   assert.equal(fs.readFileSync(path.join(f.root, 'app.js'), 'utf8'), 'module.exports = true;\n');
+});
+
+test('Claude fast-lane fixtures never inherit the caller project directory', t => {
+  const f = fixture(t);
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agentflow-fast-lane-outside-')));
+  try {
+    fs.writeFileSync(path.join(outside, 'sentinel.txt'), 'must remain\n');
+    const result = spawnSync(process.execPath, [path.join(__dirname, 'stop-hook.js'), '--host', 'claude'], {
+      cwd: f.root,
+      input: JSON.stringify({ cwd: f.root, hook_event_name: 'Stop' }),
+      encoding: 'utf8',
+      env: { ...process.env, CLAUDE_PROJECT_DIR: outside, CLAUDE_SESSION_ID: '' },
+    });
+    assert.notEqual(result.status, 2, result.stderr);
+    assert.equal(fs.readFileSync(path.join(outside, 'sentinel.txt'), 'utf8'), 'must remain\n');
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
 });
 
 test('fast-lane waives pipeline ceremony in both hooks and the linter, including stale pipeline facts', t => {
@@ -128,3 +188,48 @@ test('fast-lane and standalone review skips still require host self-review befor
     for (const host of ['codex', 'claude']) assert.equal(f.hook(host).status, 2);
   }
 });
+
+
+test('skip-ag overrides pipeline trigger facts while retaining route integrity', t => {
+  const f = fixture(t);
+  const facts = f.facts(f.write('+ skip-ag implement the fix', true));
+  const route = { operation: 'ag', allow_ag: 'on', route: 'direct', material_risks: ['trust_boundary'], named_questions: [], owner_confirmation: 'not_required', reason: 'Owner skips pipeline; host verifies boundary and normal review remains.' };
+  const check = value => lint_round({ ...facts, route_decision: value }).checks.find(item => item.id === 'route_decision');
+  for (const operation of ['ag', 'all-in', 'make-plans']) assert.equal(check({ ...route, operation }).status, 'pass', operation);
+  assert.equal(check({ ...route, allow_ag: 'off' }).status, 'pass');
+  assert.equal(check({ ...route, reason: '' }).status, 'fail');
+  assert.equal(check({ ...route, owner_confirmation: 'approved' }).status, 'fail');
+  assert.equal(check({ ...route, route: 'full_pipeline' }).status, 'fail');
+});
+
+for (const name of ['fast-lane', 'skip-ag']) {
+  for (const quote of ['"', "'", '`']) {
+    test(`${name} ignores multiline ${quote} quotations`, () => {
+      const parser = require('./fast-lane')[name === 'fast-lane' ? 'parse_fast_lane' : 'parse_skip_ag'];
+      assert.equal(parser(`${quote}\n${name}\n${quote}`), null);
+    });
+  }
+}
+
+test('lane controls retain real pending/task states beside quoted examples', () => {
+  const { parse_fast_lane, parse_skip_ag } = require('./fast-lane');
+  for (const [name, parser] of [['fast-lane', parse_fast_lane], ['skip-ag', parse_skip_ag]]) {
+    assert.deepEqual(parser(name), { state: 'pending' });
+    assert.deepEqual(parser(`${name} fix this`), { state: 'active' });
+    assert.deepEqual(parser(`"\n${name}\n"\n${name} fix this`), { state: 'active' });
+    for (const text of [`Do not use ${name}`, `If approved, ${name}`, `Unless approved, ${name}`, `> ${name}`, `~~~text\n${name}\n~~~`, `\x60\x60\x60text\n${name}\n\x60\x60\x60`]) {
+      assert.equal(parser(text), null, text);
+    }
+  }
+});
+
+for (const name of ['fast-lane', 'skip-ag']) {
+  test(`${name} keeps real controls after quotes inside fences`, () => {
+    const parser = require('./fast-lane')[name === 'fast-lane' ? 'parse_fast_lane' : 'parse_skip_ag'];
+    for (const fence of ['~~~', '\x60\x60\x60']) {
+      for (const quote of ['"', "'", '\x60']) {
+        assert.deepEqual(parser(`${fence}text\n${quote}\n${fence}\n${name} fix this\n${quote}example${quote}`), { state: 'active' });
+      }
+    }
+  });
+}

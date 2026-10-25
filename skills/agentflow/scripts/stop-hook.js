@@ -11,7 +11,7 @@
 const node_fs = require('node:fs');
 const node_path = require('node:path');
 const { lint_round, parse_devlog } = require('./round-linter');
-const { collect } = require('./completion-context');
+const { collect, no_ag_bypass, latest_owner_prompt } = require('./completion-context');
 
 const external_delegate_marker_pattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
@@ -55,13 +55,34 @@ const main = () => {
     throw new Error('Stop hook requires --host codex or --host claude');
   }
 
+  // Claude prompt events do not establish owner-message origin. Loaded older
+  // hooks must stay silent and leave notebook state untouched.
+  if (active_host === 'claude' && capturing_prompt) return 0;
+
   // CLAUDE_PROJECT_DIR is Claude-Code-only; every host passes cwd on stdin.
-  const project_dir = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
+  const project_dir = (active_host === 'claude' ? process.env.CLAUDE_PROJECT_DIR : '') || input.cwd || process.cwd();
+  if (capturing_prompt) {
+    const opted_out = typeof input.prompt === 'string' && no_ag_bypass(input.prompt);
+    if (opted_out) return 0;
+  } else {
+    const prompt = typeof input.prompt === 'string' ? input.prompt : latest_owner_prompt(input.transcript_path, input.session_id);
+    if (prompt !== undefined) {
+      const opted_out = no_ag_bypass(prompt);
+      if (opted_out) return 0;
+    }
+  }
+
   let notebook_path = '.agentflow/devlog.md';
   let config_path = node_path.join(project_dir, 'ag.json');
   const project_name = node_path.basename(project_dir);
   const in_named_worktree = node_path.basename(node_path.dirname(project_dir)) === '.worktrees' && /^[a-z0-9][a-z0-9-]*$/u.test(project_name);
-  if (in_named_worktree) {
+  if (require('./notebook-owner').linked_worktree(project_dir)) {
+    const branch = require('node:child_process').spawnSync('git', ['branch', '--show-current'], { cwd: project_dir, encoding: 'utf8' });
+    notebook_path = branch.status === 0 ? require('./agf').stream_doc(project_dir, branch.stdout.trim()) : '';
+    if (!notebook_path) throw Error('stream notebook is missing for this worktree; restore its canonical notebook before capture');
+    config_path = require('./ag-settings').resolve_config_path(project_dir, notebook_path);
+    if (!node_fs.existsSync(config_path)) throw Error('stream configuration is missing; restore its notebook/configuration pair before capture');
+  } else if (in_named_worktree) {
     const stream_notebook = node_path.posix.join('.agentflow', 'features', project_name, `${project_name}.devlog.md`);
     const stream_config = node_path.join(project_dir, '.agentflow', 'features', project_name, 'ag.json');
     if (node_fs.existsSync(node_path.join(project_dir, stream_notebook)) && node_fs.existsSync(stream_config)) {
@@ -83,17 +104,43 @@ const main = () => {
   if (!node_fs.existsSync(devlog_path)) return 0;
 
   if (input.hook_event_name === 'UserPromptSubmit') {
-    const result = require('./notebook-write.js').append_input({
-      root: project_dir, notebook: notebook_path, text: input.prompt,
-      host: active_host,
-      message_id: input.turn_id ? `${input.session_id || ''}:${input.turn_id}` : undefined,
-    });
+    const current = parse_devlog(node_fs.readFileSync(devlog_path, 'utf8')).rounds.at(-1);
+    if (!current || current.reply_text.trim()) {
+      // Missing bookkeeping must not prevent the owner from requesting repair.
+      // Leave history and ownership untouched; the agent receives the prompt.
+      process.stdout.write(JSON.stringify({ hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: `The user's instruction was not saved in ${notebook_path}: the notebook has no open Ask. Continue with the submitted request. Repair the missing Ask and capture the instruction before further notebook writes, preserving prior history and other sessions' ownership. Do not record this hook notice as user input.`,
+      } }) + '\n');
+      return 0;
+    }
+    let result;
+    try {
+      result = require('./notebook-write.js').append_input({
+        root: project_dir, notebook: notebook_path, text: input.prompt,
+        host: active_host,
+        session: input.session_id,
+        message_id: input.turn_id ? `${input.session_id || ''}:${input.turn_id}` : undefined,
+      });
+    } catch (error) {
+      if (error.code !== 'AG_NOTEBOOK_OWNER') throw error;
+      // Refuse unauthorized notebook writes, not delivery of the owner's request.
+      process.stdout.write(JSON.stringify({ hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: `The user's instruction was not saved in ${notebook_path}: notebook ownership prevented capture. Continue with the submitted request, including any no-ag instruction. Do not mutate this notebook or adopt ownership without resolving the ownership conflict and establishing owner authorization. Inspect ownership before notebook recovery. Diagnostic: ${error.message}. Do not record this hook notice as user input.`,
+      } }) + '\n');
+      return 0;
+    }
     const round = parse_devlog(node_fs.readFileSync(devlog_path, 'utf8')).rounds.at(-1);
     const fast_lane = require('./fast-lane.js').parse_fast_lane(round?.owner_text);
-    const route_notice = fast_lane ? ` Fast-lane ${fast_lane.state}: work directly without AG, delegation, new streams, external review, or pipeline approval/artifact requirements. Keep host self-review, necessary tests, trackers, timed WIP checkpoints, detailed reports, and integrity checks. ${fast_lane.state === 'pending' ? 'Wait for the task; leave this Ask open without a Reply or closeout.' : 'This applies through this task’s closeout, then expires.'}` : '';
-    if (result.inserted) process.stdout.write(JSON.stringify({ hookSpecificOutput: {
+    const skip_ag = require('./fast-lane.js').parse_skip_ag(round?.owner_text);
+    const route_notice = fast_lane ? ` Fast-lane ${fast_lane.state}: work directly without AG, delegation, new streams, external review, or pipeline approval/artifact requirements. Keep host self-review, necessary tests, trackers, timed WIP checkpoints, detailed reports, and integrity checks. ${fast_lane.state === 'pending' ? 'Wait for the task; leave this Ask open without a Reply or closeout.' : 'This applies through this task’s closeout, then expires.'}` : skip_ag ? ` Skip-ag ${skip_ag.state}: skip the development pipeline and advisors for this Ask; retain normal logging, review, execution, integrity and closeout rules. ${skip_ag.state === 'pending' ? 'Wait for the task; leave this Ask open.' : 'This expires when the task closes.'}` : '';
+    const capture_state = result.inserted ? 'was saved' : 'was already present; no duplicate was written'
+    const session_notice = input.session_id ? ` Hook session: ${input.session_id}.` : ''
+    const compaction_notice = result.compaction ? ` ${result.compaction.message}` : ''
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
-      additionalContext: `The user's instruction was saved in ${notebook_path}, ${result.ask}. Read the current Ask and address all its instructions together. Do not record this hook notice as user input.${route_notice}`,
+      additionalContext: `The user's instruction ${capture_state} in ${notebook_path}, ${result.ask}.${session_notice} Read the current Ask and address all its instructions together. Do not record this hook notice as user input.${route_notice}${compaction_notice}`,
     } }) + '\n');
     return 0;
   }
@@ -101,6 +148,7 @@ const main = () => {
   const devlog_text = node_fs.readFileSync(devlog_path, 'utf8');
   const rounds = parse_devlog(devlog_text).rounds;
   if (rounds.length === 1 && ['', '+'].includes(rounds[0].ask_text.trim()) && !rounds[0].reply_text.trim() && !rounds[0].wip_text.trim()) return 0;
+  if (require('./closed-round').verified_closed_round(project_dir, notebook_path, active_host, devlog_text)) return 0;
   const context = collect({
     project_root: project_dir,
     notebook_path,
@@ -141,9 +189,13 @@ let exit_code = 0;
 try {
   exit_code = main();
 } catch (error) {
-  // A failed capture must be visible; never let a prompt silently disappear.
+  // Logging infrastructure must not prevent the owner from requesting repair.
   process.stderr.write(`Agentflow hook error: ${error.message}\n`);
-  exit_code = capturing_prompt ? 2 : 0;
+  if (capturing_prompt) process.stdout.write(JSON.stringify({ hookSpecificOutput: {
+    hookEventName: 'UserPromptSubmit',
+    additionalContext: `Automatic notebook capture did not complete. Continue with the submitted request, including any no-ag instruction. The instruction may already be saved if a later step failed; inspect the current Ask before retrying capture. Preserve history, existing locks and other sessions' ownership; do not force a notebook write or ownership takeover. Diagnostic: ${error.message}. Do not record this hook notice as user input.`,
+  } }) + '\n');
+  exit_code = 0;
 }
 
 process.exit(exit_code);

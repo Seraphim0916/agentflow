@@ -1,10 +1,12 @@
-# Agentflow v8.2.0
+# Agentflow v8.4.15
+
+此 repo 保留 **Agentflow 8**。Agentflow 9 穩定版位於 [agfnow/agentflow](https://github.com/agfnow/agentflow)。要繼續使用 v8，請明確從 `agfnow/agentflow-v8` 安裝；既有安裝若仍記錄舊 repo 網址，請先重新綁定來源，再執行更新。v8 與 v9 共用 `agentflow` 技能／外掛名稱：同一主機／專案只啟用其中一版。
 
 [English](README.md) · **繁體中文**
 
 幫 AI 助理準備一本專案筆記，明天開新的對話，也能接著今天的工作做。
 
-Agentflow 適用於 **Codex 和 Claude Code**，會把你的要求、決定、進度和結果保存在容易閱讀的檔案裡。改文件、修程式，或分好幾次完成一個專案，都能用。
+Agentflow 已驗證 **Codex 和 Claude Code** 的整合，也提供 通用核心流程，讓具備檔案、指令和狀態保存能力的其他 host 使用。它會把你的要求、決定、進度和結果保存在容易閱讀的檔案裡。改文件、修程式，或分好幾次完成一個專案，都能用。
 
 - **直接開始：** 輸入 `godev`，再用平常說話的方式交代任務。
 
@@ -12,27 +14,31 @@ Agentflow 適用於 **Codex 和 Claude Code**，會把你的要求、決定、�
 
 - **最快的入門方式：** 直接問你的 agent：「這件事要怎麼用 Agentflow skill 來做？」它可以配合你的專案說明用法。
 
+- **先討論可能的工作：** 說「能換個供應商嗎？先跟我討論」，助理會記下待辦想法，討論後在筆記回覆中請你確認。記錄想法不代表授權實作；拒絕或延後也會保留紀錄。
+
+自動封存會通知哪個舊答案或要求使歷史留在目前筆記。助手必須先復原內容並核對完整保存的回覆，才能解除這項保護；尚未處理的項目仍保留。
+
 ## 安裝
 
-需要 Node.js 18 或更新版本，以及可正常使用的 Codex 或 Claude Code。要保留版本紀錄、建立功能工作區，或使用某些安裝方式時，需要 Git。一般筆記工作可以在還不是 Git 儲存庫的資料夾裡進行。
+需要 Node.js 18 或更新版本，以及能讀寫檔案、執行指令的 host。Codex 和 Claude 提供已驗證的 hooks；其他助理 要使用明確安全 ID、選填的已知 family，並手動記錄訊息和收尾，因為它沒有這些 hooks。要保留版本紀錄、建立功能工作區，或使用某些安裝方式時，需要 Git。一般筆記工作可以在還不是 Git 儲存庫的資料夾裡進行。
 
 在終端機執行以下指令，再選擇助理和安裝範圍：
 
 ```sh
-npx skills add agfnow/agentflow
+npx skills add agfnow/agentflow-v8
 ```
 
 若要使用 Claude Code 外掛，先在 Claude Code 加入外掛市集：
 
 ```text
-/plugin marketplace add agfnow/agentflow
+/plugin marketplace add agfnow/agentflow-v8
 ```
 
 接著從該市集安裝 `agentflow` 外掛。外掛是否自動更新，依你的 [Claude Code 市集設定](https://code.claude.com/docs/en/discover-plugins#configure-auto-updates)而定。安裝或更新後，請開啟新的助理對話。
 
 ## 控場模型怎麼選
 
-使用 Codex 時，Agentflow 維護者依自己的使用經驗，建議以 **`gpt-5.6-sol/low` 作為表現最穩定的控場模型**：模型選 `gpt-5.6-sol`，推理程度選 `low`。控場就是負責和你對話、安排工作、檢查成果的主要助理。這項建議不會自動更動你的模型設定。另見[官方模型說明](https://developers.openai.com/api/docs/models/gpt-5.6-sol)。
+使用 Codex 時，我們建議以 **`gpt-6.1-sol/medium` 作為表現最穩定的控場模型**：模型選 `gpt-6.1-sol`，推理程度選 `medium`。控場就是負責和你對話、安排工作、檢查成果的主要助理。這項建議不會自動更動你的模型設定。另見[官方模型說明](https://developers.openai.com/api/docs/models/gpt-6.1-sol)。
 
 ## 記得更新
 
@@ -42,7 +48,7 @@ npx skills add agfnow/agentflow
 npx skills update agentflow
 ```
 
-目前 [Skills CLI](https://github.com/vercel-labs/skills#skills-update) 是依已安裝的 skill 名稱更新。`agfnow/agentflow` 是安裝來源，因此 `npx skills update agfnow/agentflow` 不是目前依名稱更新的語法。全域安裝可加上 `-g`；專案內安裝則在該專案執行，並加上 `-p`。
+目前 [Skills CLI](https://github.com/vercel-labs/skills#skills-update) 是依已安裝的 skill 名稱更新。`agfnow/agentflow-v8` 是安裝來源，因此 `npx skills update agfnow/agentflow-v8` 不是目前依名稱更新的語法。全域安裝可加上 `-g`；專案內安裝則在該專案執行，並加上 `-p`。
 
 若想自動更新，建議在 macOS 或 Linux 設定每週一次的 **crontab 工作排程**。可以直接請 agent 協助，依你的安裝位置設定。[使用指南](skills/agentflow/docs/AG_GUIDE.zh-tw.md#定期更新-skill)提供週一上午更新的範例，包含完整路徑與執行紀錄。
 
@@ -56,13 +62,43 @@ godev
 保留現有連結，做好後先讓我檢查，不要上傳。
 ```
 
-小事可以簡單處理。`fast-lane` 讓一項任務由目前的助理完成，略過外部審查，但保留必要檢查和自行審查。`cross-check` 要求獨立檢查已完成的成果；`ag` 則在專案的 `allow-ag` 設定允許時，要求完整開發流程。
+小事可以簡單處理。`fast-lane` 讓一項任務由目前的助理完成，略過 另一位助理審查，但保留必要檢查和自行審查。`cross-check` 要求 另一位助理審查；`review-policy: prefer-independent` 會在 另一位助理審查 確認無法使用後允許清楚標記的 目前助理自行審查，`require-independent` 則維持嚴格要求。`ag` 則在專案的 `allow-ag` 設定允許時，要求完整開發流程。
+
+`skip-ag [任務]` 或 `/skip-ag [任務]` 只略過目前 Ask 的開發流程及其顧問，保留 devlog、必要檢查、一般獨立審查、普通委派與 stream 規則。它不改變專案設定，Ask 結束後失效；只有指令而沒有任務時會等待任務。在訊息開頭輸入未加引號的 `no-ag 數一下檔案。`、`no-ag: 數一下檔案。` 或 `no-ag, 數一下檔案。`，會略過該則訊息的整個 Agentflow 協定，包括筆記記錄與收尾。單獨輸入 `no-ag` 也有效；引號內的範例與條件句不會啟動它，下一則一般訊息會恢復正常流程；`fast-lane` 還會略過委派、新 stream 與獨立審查。
 
 對話會留在筆記裡。換新對話後，輸入 `godev` 就能接續尚未完成的要求。有 Git 時，Agentflow 通常會提交完成的工作，並在設有遠端儲存庫時推送；如果只想在本機完成，請先說明。
+
+## 共用筆記
+
+`notebook-ownership: on|off` 預設為 `off`，省略時也一樣。開啟時，一個進行中的筆記回合只由一個工作階段寫入；關閉時，不同工作階段可能將訊息、決定和回覆混在同一回合。兩種模式都保留檔案鎖、安全路徑、目前回合、未改動快照與筆記路由檢查。關閉時不改動既有所有權紀錄。若可能共用筆記，請設為 `notebook-ownership: on`；重新開啟時，保留的舊紀錄可能需要明確接管。目前沒有證據顯示關閉後啟動會明顯加快。
+
+Codex 會自動記錄後續的使用者訊息。Claude 保留啟動訊息記錄及檢查收尾的 Stop hook，但助理必須使用啟動回傳的 `session_id` 手動保存後續真正由使用者送出的訊息；自動產生的報告不得寫入 Ask。更新設定時，只會移除所選範圍內屬於 Agentflow 的 Claude 訊息 hook；舊的全域安裝須另外更新並移除該 hook。收到提醒時請重新啟動。
 
 ## 檢查安裝
 
 請 agent 執行 `agf setup`；如果指令捷徑已可使用，也能直接在終端機執行。`agf setup --fix` 會先備份 shell 設定，再補上缺少的捷徑。選用的協作助理無法使用，不一定代表安裝失敗。安裝專案 hooks 後，若收到重新啟動提醒，照做即可。
+
+<details>
+
+<summary>找不到 agf 指令捷徑時</summary>
+
+若全域安裝位於以下位置，請執行對應的設定檔。若安裝在其他位置，請先讓 agent 找出已安裝的 skill。
+
+```sh
+node "$HOME/.codex/skills/agentflow/scripts/setup.js"
+```
+
+```sh
+node "$HOME/.claude/skills/agentflow/scripts/setup.js"
+```
+
+</details>
+
+## Windows 與貢獻者測試
+
+- 安裝時不需要執行迴歸測試。貢獻者可在[腳本說明](skills/agentflow/scripts/README.md)查看測試指令。
+
+- 可跨平台的核心測試已在原生 Windows 搭配 Node.js 24 驗證。需要 Unix 終端或行程控制的測試會明確略過；背景 looper 尚不支援原生 Windows。
 
 ## 接著看
 
@@ -70,8 +106,10 @@ godev
 
 - [English user guide](skills/agentflow/docs/AG_GUIDE.md)。
 
+- [給新助理的簡介](skills/agentflow/docs/agent-brief.md)，先了解流程，再依已安裝的 skill 執行。
+
 - [版本更新紀錄](CHANGELOG.md)，最新版本放在最上方。
 
 - [指令參考](skills/agentflow/scripts/README.md)，供進階設定與問題排除使用。
 
-專案設定保存在 `ag.json`，目前使用設定格式版本 7。輸入 `settings` 即可查看。設定格式版號與 Agentflow 發佈版號不同；模型組合放在 `external-workers`，顧問角色設定放在 `pipeline-roles`。
+專案設定保存在 `ag.json`，目前使用設定格式版本 8。輸入 `settings` 即可查看。啟動時會依最新版範本補齊缺少的屬性，並回報無效的已存值及建議值；修改錯誤值前會先徵求同意，不安全的無效設定仍會停止啟動。既有 v7 檔案只在開啟時以保守方式遷移。`allowed-worker` 是 external、internal、host 的無順序權限清單，排列順序不代表執行優先級；`cli-provider` 只篩選 external profile。模型組合放在 `external-workers`，顧問角色設定放在 `pipeline-roles`。
